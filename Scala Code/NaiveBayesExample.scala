@@ -1,84 +1,91 @@
-import org.apache.spark.ml.Pipeline
-import org.apache.spark.ml.classification.LogisticRegression
+import java.io.{File, PrintWriter}
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 
+
+//Note: The following code has been adapted from the Apache Spark ML Reference:
+//https://spark.apache.org/docs/latest/ml-classification-regression.html#naive-bayes
 object NaiveBayesExample {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession
       .builder
       .master("local[*]")
-      .appName("NaiveBayesExample")
+      .appName("NaiveBayes")
       .getOrCreate()
 
     val sqlContext = spark.sqlContext; import sqlContext.implicits._
 
-    val year = 2014
+    val year = 2009
+   /* val pw = new PrintWriter(new File("D:/NaiveBayesSummary.txt"))
 
-    // $example on$
-    // Load the data stored in LIBSVM format as a DataFrame.
-    val data = spark.read.format("csv").option("header", "true").option("inferSchema", "true")
-      .load("D:/data/us_weather_2018.csv")
+    pw.write("Naive Bayes Statistics\r\n")*/
 
-    val indexer = new StringIndexer().setInputCol("VISIB").setOutputCol("label")
+    for ( year <- 2009 to 2018) {
+      // Load the data stored in LIBSVM format as a DataFrame.
+     /* var data = spark.read.format("csv").option("header", "true").option("inferSchema", "true")
+        .load("D:/data/us_weather_data_clean/us_weather_" + year + "_clean/us_weather_" + year + "_clean.csv")*/
 
-    val assembler =  new VectorAssembler()
-      .setInputCols(Array("PRCP", "YEARMODA"))
-      .setOutputCol("features")
-
-
+     var data = spark.read.format("csv").option("header", "true").option("inferSchema", "true")
+       .load("gs://dataproc-2edb4c03-c77c-4c73-94c5-3d77afbb94fd-us-east1/us_weather_data_clean/us_weather_" + year + "_clean/us_weather_" + year + "_clean.csv")
 
 
-    //assembler.setOutputCol("label")
+      data.show(false)
 
-    //val assembler2 = assembler.setInputCols(Array(assembler.getOutputCol)).setOutputCol("label")
+      data.printSchema()
 
-    val df1 = assembler.transform(data)
-    //output.show(false)
-    //df1.withColumn("label", df1("features"))
+      val indexer = new StringIndexer().setInputCol("R").setOutputCol("label")
 
-    df1.show(false)
-
-    val df2 = indexer.fit(df1).transform(df1)
-    df2.show
-
-    //val pipeline = new Pipeline()
-
-    // Split the data into training and test sets (30% held out for testing)
-    val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), seed = 1234L)
+      val assembler = new VectorAssembler()
+        .setInputCols(Array("YEARMODA", "PRCP", "SLP", "STP", "VISIB"))
+        .setOutputCol("features")
 
 
+      val df1 = assembler.transform(data)
 
-    //trainingData.show(false)
-
-    // Train a NaiveBayes model.
-    val model = new NaiveBayes().fit(trainingData)
-
-
-    // Select example rows to display.
-    val predictions = model.transform(testData)
-    predictions.show(false )
+      val df2 = indexer.fit(df1).transform(df1)
+      df2.show
 
 
-    //.fit(trainingData)
-
-    //val rModel = model.fit(trainingData)
-    //val predicitveModel = model.fit(testData)
+      // Split the data into training and test sets (30% held out for testing)
+      val Array(trainingData, testData) = df2.randomSplit(Array(0.7, 0.3), seed = 1234L)
 
 
-    // $example off$
+      // Train a NaiveBayes model.
+      val model = new NaiveBayes().fit(trainingData)
 
-    //spark.stop()
-    val evaluator = new MulticlassClassificationEvaluator()
-      .setLabelCol("label")
-      .setPredictionCol("prediction")
-      .setMetricName("accuracy")
-    val accuracy = evaluator.evaluate(predictions)
-    println(s"Test set accuracy = $accuracy")
+      val predictions = model.transform(testData)
+      //predictions.show(false )
+      predictions.describe("label", "prediction").show(false)
 
-    //model.save("D:/data/LogisticRegression")
+      val training_results = model.transform(trainingData)
+
+      val evaluator = new MulticlassClassificationEvaluator()
+        .setLabelCol("label")
+        .setPredictionCol("prediction")
+        .setMetricName("accuracy")
+
+      val accuracy = evaluator.evaluate(predictions)
+
+      val evaluator2 = new MulticlassClassificationEvaluator()
+        .setLabelCol("label")
+        .setPredictionCol("prediction")
+        .setMetricName("accuracy")
+
+      val accuracy2 = evaluator.evaluate(training_results)
+
+      println(s"Test set accuracy = $accuracy")
+      println(s"Training set accuracy = $accuracy2")
+
+
+     /* pw.write("Year: " + year + "\r\n")
+      pw.write(s"Test Model accuracy: $accuracy\r\n")
+      pw.write(s"Training Model accuracy: $accuracy2\r\n")*/
+
+
+    }
+    //pw.close()
 
 
   }
